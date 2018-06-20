@@ -3,8 +3,8 @@ import matplotlib.pyplot as plt
 from matplotlib.path import Path
 from matplotlib.widgets import LassoSelector
 import numpy as np
-
 #import scipy.io as sio
+
 class phi:
     #mask = sio.loadmat('MASK_zebra.mat')['mask']
     def __init__(self, img, shape, mask):

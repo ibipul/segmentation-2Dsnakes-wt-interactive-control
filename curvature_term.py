@@ -12,8 +12,7 @@ class meancurvature:
     def get_mean_curvature(self, narrow_band, narrow_band_point_loc,phi):
         num_pts = len(narrow_band_point_loc)
         K = np.zeros(num_pts)
-        nrows = phi.shape[0]
-        ncols = phi.shape[1]
+
         for i in range(len(narrow_band_point_loc)):
 
             pt = narrow_band_point_loc[i]

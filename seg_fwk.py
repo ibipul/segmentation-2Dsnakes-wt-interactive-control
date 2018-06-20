@@ -1,9 +1,10 @@
 from initialize_phi import phi as ph
-from schemes import  chanvesse_functional
+from schemes import  chanvesse_functional, yezzi_functional
 import scipy.ndimage
 class segmentation:
 
-    def __init__(self, img, algo,dt):
+    def __init__(self, imname, algo,dt):
+        self.imname = imname
         self.img = self.get_image()
         self.img_shape = self.img.shape
         self.algo = algo
@@ -12,10 +13,19 @@ class segmentation:
 
 
     def get_image(self):
-        img = scipy.ndimage.imread('airplane.png')#('zebra.bmp')
+        if self.imname == 'airplane':
+            img = scipy.ndimage.imread('airplane.png')
+        elif self.imname == 'zebra':
+            img = scipy.ndimage.imread('zebra.bmp')
+        elif self.imname == 'twoObj':
+            img = scipy.ndimage.imread('twoObj.bmp')
         return img
 
     def execute(self):
-        algo_obj = chanvesse_functional(img=self.img, phi_init=self.phi_obj, dt=self.dt)
-        algo_obj.run_chanvesse()
+        if self.algo == 'chanvesse':
+            algo_obj = chanvesse_functional(img=self.img, phi_init=self.phi_obj, dt=self.dt)
+            algo_obj.run_chanvesse()
 
+        elif self.algo == 'yezzi':
+            algo_obj = yezzi_functional(img=self.img, phi_init=self.phi_obj, dt=self.dt)
+            algo_obj.run_yezzi()
