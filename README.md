@@ -17,8 +17,16 @@ Test Runs:
 * Clone the repository
 * ```
     from seg_fwk import segmentation
+    
     s = segmentation(imname='twoObj',algo='yezzi', dt=0.5)
     s.execute()
+
+    s = segmentation(imname='zebra',algo='bhattacharya', dt=0.5)
+    s.execute()
+    
+    s = segmentation(imname='airplane',algo='chanvesse', dt=0.5)
+    s.execute()
+    
    ```
 * Availabe options for imname are: `twoObj`,`zebra`,`airplane`;
   Availabe options for algos are: `chanvesse`,`yezzi`,`bhattacharya`.
