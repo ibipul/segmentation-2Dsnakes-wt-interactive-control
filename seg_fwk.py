@@ -1,5 +1,5 @@
 from initialize_phi import phi as ph
-from schemes import  chanvesse_functional, yezzi_functional
+from schemes import  chanvesse_functional, yezzi_functional, bhattacharya_functional
 import scipy.ndimage
 class segmentation:
 
@@ -29,3 +29,7 @@ class segmentation:
         elif self.algo == 'yezzi':
             algo_obj = yezzi_functional(img=self.img, phi_init=self.phi_obj, dt=self.dt)
             algo_obj.run_yezzi()
+
+        elif self.algo == 'bhattacharya':
+            algo_obj = bhattacharya_functional(img=self.img, phi_init=self.phi_obj, dt=self.dt)
+            algo_obj.run_bhattacharya()
