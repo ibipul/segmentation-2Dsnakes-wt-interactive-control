@@ -3,6 +3,8 @@ import math
 from curvature_term import meancurvature
 from redistance import sussman as ss
 from matplotlib import pyplot as ppl
+from matplotlib.path import Path
+from matplotlib.widgets import LassoSelector
 
 class chanvesse_functional:
     _PHI_LOWER = -2
@@ -24,7 +26,7 @@ class chanvesse_functional:
         fig.clf()
         ax1 = fig.add_subplot(1, 1, 1)
         ax1.imshow(self.I, cmap=ppl.cm.gray)
-        ax1.contour(self.phi, [0.5], colors='r')
+        ax1.contour(self.phi, [-1,+1], colors='r')
         ppl.pause(0.001)
         Dold = -9999
         curvature_obj = meancurvature(rows=self.nrow, cols=self.ncol)
@@ -59,7 +61,7 @@ class chanvesse_functional:
                 fig.clf()
                 ax1 = fig.add_subplot(1, 1, 1)
                 ax1.imshow(self.I, cmap=ppl.cm.gray)
-                ax1.contour(self.phi, [0.5], colors='r')
+                ax1.contour(self.phi, [-1,+1], colors='r')
                 ppl.pause(0.001)
                 if s% 100 ==0:
                     print( s, 'mu_in:: ', mu_in, ' mu_out::', mu_out, 'E:: ', D)
@@ -250,5 +252,186 @@ class bhattacharya_functional:
         t_1 = -0.5* Z[self.I[narrow_band]]
         d_T = t_0 + t_1
         return d_T
+
+class seg_w_control:
+    _PHI_LOWER = -2
+    _PHI_UPPER = +2
+    _eps = 2.2204e-16
+    _iter = 5000
+    _alpha = 0.00001
+    _tol = 1e-18
+
+    def __init__(self, img, phi_init, dt):
+        self.I = img
+        self.nrow, self.ncol = self.I.shape[0], self.I.shape[1]
+        self.phi = -phi_init.get_phi()
+        self.phi_hat = -phi_init.get_phi()
+        self.umask = None
+        self.U = np.zeros(self.phi.shape)
+        self.F = np.zeros(self.phi.shape)
+        self.dt = dt
+        self.rdist = ss(dt=self.dt)
+
+
+    def run(self):
+        fig = ppl.gcf()
+        fig.clf()
+        ax1 = fig.add_subplot(121)
+        ax2 = fig.add_subplot(122)
+        ax1.imshow(self.I, cmap=ppl.cm.gray)
+        ax1.contour(self.phi, [0.5], colors='r')
+        ax2.imshow(self.phi,cmap='hot')
+        ppl.pause(0.001)
+        curvature_obj = meancurvature(rows=self.nrow, cols=self.ncol)
+        for s in range(self._iter):
+            # Get narrow band - phi
+            C = np.logical_and(self.phi < self._PHI_UPPER,
+                               self.phi > self._PHI_LOWER)
+            narrow_band = np.where(C == True)
+            narrow_band_point_loc = [x for x in zip(narrow_band[0], narrow_band[1])]
+
+            # Get narrow band - phi_hat
+            C_hat = np.logical_and(self.phi < self._PHI_UPPER,
+                               self.phi > self._PHI_LOWER)
+            narrow_band_hat = np.where(C == True)
+            narrow_band_point_loc_hat = [x for x in zip(narrow_band_hat[0], narrow_band_hat[1])]
+
+            # Get Narrow band -- U
+            C_U = np.logical_and(self.phi < self._PHI_UPPER,
+                                   self.phi > self._PHI_LOWER)
+            narrow_band_U = np.where(C == True)
+            narrow_band_point_loc_U = [x for x in zip(narrow_band_U[0], narrow_band_U[1])]
+
+            # Get in out points - phi
+            in_pt_indices = np.where(self.phi > 0)
+            out_pt_indices = np.where(self.phi < 0)
+
+            ## Get in out points - phi_hat
+            in_pt_indices_hat = np.where(self.phi_hat > 0)
+            out_pt_indices_hat = np.where(self.phi_hat < 0)
+
+            ## Get in out points - U
+            in_pt_indices_U = np.where(self.U > 0)
+            out_pt_indices_U = np.where(self.U <= 0)
+
+            ## means in and out - phi
+            mu_in = np.mean(self.I[in_pt_indices])
+            mu_out = np.mean(self.I[out_pt_indices])
+            self.phi_hat_in = np.mean(self.phi_hat[in_pt_indices_hat])
+
+            # H phi hat - H phi
+            del_phi = np.subtract(self.H(phi=self.phi_hat, in_pt_indices=in_pt_indices_hat),
+                                  self.H(phi=self.phi, in_pt_indices=in_pt_indices))
+            # H phi - H phi hat
+            eta = -1 * del_phi
+
+            #F = -0.5*max(mu_out,mu_in) * del_phi #Control term
+            # G_i
+            G = self.grad_phi(mu_in=mu_in,mu_out=mu_out,narrow_band=narrow_band) #Energy term
+            #G = self.grad_phi_check(mu_in=mu_in, mu_out=mu_out)
+            # G_i complement
+            G_c = self.grad_phi(mu_in=mu_out, mu_out=mu_in, narrow_band=narrow_band)
+            #G_c = self.grad_phi_check(mu_in=mu_out, mu_out=mu_in)
+
+            # supremum { |G|, |G_c|} *
+            F = 2*np.multiply(np.maximum(np.absolute(G), np.absolute(G_c)), del_phi)#np.add(np.ones(del_phi.shape)*10,np.multiply(np.maximum(G, G_c), del_phi))  # Control term
+            #K = curvature_obj.get_mean_curvature_matrix(narrow_band=narrow_band,narrow_band_point_loc=narrow_band_point_loc,phi=self.phi)
+            energy_change = G #np.add(G,K)
+            energy_change = np.add(energy_change, F)
+            emax = np.amax(energy_change)
+            self.phi = np.add(self.phi, (self.dt / (emax + self._eps)) * energy_change)
+
+
+            Eu = np.subtract(self.H(phi=self.phi_hat, in_pt_indices=in_pt_indices_hat),
+                             self.H(phi=self.U, in_pt_indices=in_pt_indices_U))
+            f_eu = -np.multiply(Eu,np.absolute(self.U))
+
+            hat_energy_change = np.add(eta, f_eu)
+            hat_emax = np.amax(hat_energy_change)
+
+
+            # self.phi = np.add(self.phi, self.dt* (np.add(energy_change,F)))
+            # self.phi_hat = np.add(self.phi_hat, self.dt* (np.add(eta,f_eu)))
+
+            self.phi_hat[narrow_band_hat] = np.add(self.phi_hat, (self.dt*self.phi_hat_in/(hat_emax + self._eps))* hat_energy_change)[narrow_band_hat]
+            #self.phi_hat = np.add(self.phi_hat, (self.dt * self.phi_hat_in / (hat_emax + self._eps)) * hat_energy_change)
+
+            if s % 10 == 0:
+                self.phi = self.rdist.sussman_redistancing(self.phi)
+                self.phi_hat = self.rdist.sussman_redistancing(self.phi_hat)
+                self.U = self.rdist.sussman_redistancing(self.U)
+
+                fig = ppl.gcf()
+                fig.clf()
+                ax1 = fig.add_subplot(141)
+                ax2 = fig.add_subplot(142)
+                ax3 = fig.add_subplot(143)
+                ax4 = fig.add_subplot(144)
+                ax1.imshow(self.I, cmap=ppl.cm.gray)
+                ax1.contour(self.phi, [0.5], colors='r')
+
+                ax2.imshow(self.phi, cmap='hot')
+                ax2.contour(self.phi, [0.5], colors='r')
+
+                ax3.imshow(self.phi_hat, cmap='hot')
+                ax3.contour(self.phi_hat, [0.5], colors='b')
+
+                ax4.imshow(self.U, cmap='hot')
+                ax4.contour(self.phi, [0.5], colors='g')
+
+
+                ppl.pause(0.001)
+                if s % 200 == 0:
+                    print(s, 'mu_in:: ', mu_in, ' mu_out::', mu_out, 'U in: ', len(in_pt_indices_U[0]), 'U_out: ', len(out_pt_indices_U[0]),' U sum: ', self.U.sum())
+                    x, y = np.meshgrid(np.arange(self.I.shape[1]), np.arange(self.I.shape[0]))
+                    pix = np.vstack((x.flatten(), y.flatten())).T
+
+                    def onselect(verts):
+                        # Select elements in original array bounded by selector path:
+                        p = Path(verts)
+                        ind = p.contains_points(pix, radius=1)
+                        selected = np.zeros_like(self.I)
+                        selected.flat[ind] = self.I.flat[ind]
+                        self.umask =  (selected > 0) *1
+                        self.umask = self.umask*self.phi_hat_in
+                        self.U = np.add(self.U, self.umask)
+                        ppl.close()
+
+                    m = LassoSelector(ax1, onselect)
+                    ppl.show()
+                    #self.U = self.rdist.sussman_redistancing(self.U)
+
+
+    def grad_phi(self,mu_in, mu_out,narrow_band):
+        d_T = np.zeros(self.phi.shape)
+        d_T[narrow_band] = -1* np.subtract(np.square(self.I[narrow_band] - mu_in),np.square(self.I[narrow_band] - mu_out))
+        return d_T
+
+    # def grad_phi_check(self,mu_in, mu_out):
+    #     #d_T = np.zeros(self.phi.shape)
+    #     d_T = -1* np.subtract(np.square(self.I - mu_in),np.square(self.I - mu_out))
+    #     return d_T
+    #
+    # def get_delta_phi(self, phi_hat, phi, narrow_band,in_pt_indices_hat, in_pt_indices): #in narrow band
+    #     base = np.zeros(phi.shape)
+    #     base[narrow_band] = np.subtract(self.H(phi=self.phi_hat, in_pt_indices=in_pt_indices_hat),
+    #                               self.H(phi=self.phi, in_pt_indices=in_pt_indices))[narrow_band]
+    #     return base
+    #
+    # def get_control_term(self):
+    #     pass
+
+
+    def H(self, phi, in_pt_indices):
+        base = np.zeros(phi.shape)
+        base[in_pt_indices] = 1
+        return base
+
+
+
+
+
+
+
 
 

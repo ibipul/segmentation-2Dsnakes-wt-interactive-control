@@ -22,6 +22,10 @@ class phi:
         phi = distance(1 - self.mask) - distance(self.mask) + self.mask
         return phi
 
+    def reset_phi(self, mask):
+        phi = distance(1 - self.mask) - distance(self.mask) + self.mask
+        return phi
+
     def region_select_setup(self):
         self.ax1.imshow(self.img)
         x, y = np.meshgrid(np.arange(self.img.shape[1]), np.arange(self.img.shape[0]))
