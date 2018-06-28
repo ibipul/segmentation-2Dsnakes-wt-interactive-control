@@ -8,6 +8,7 @@ class sussman:
 
     def set_phi(self,phi):
         self.NROW, self.NCOL = phi.shape[0], phi.shape[1]
+        self.phi = phi
 
     def change_dt(self,dt):
         self.dt = dt
@@ -106,6 +107,3 @@ class sussman:
         new_phi -= np.multiply(self.dt * susman_sign, d_phi)
 
         return new_phi
-
-
-

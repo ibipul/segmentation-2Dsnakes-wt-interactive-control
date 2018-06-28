@@ -1,5 +1,5 @@
 from initialize_phi import phi as ph
-from schemes import  chanvesse_functional, yezzi_functional, bhattacharya_functional,seg_w_control
+from schemes import  chanvesse_functional, yezzi_functional, bhattacharya_functional,seg_w_control,optimal_segmentation
 import scipy.ndimage
 class segmentation:
 
@@ -33,6 +33,10 @@ class segmentation:
         elif self.algo == 'bhattacharya':
             algo_obj = bhattacharya_functional(img=self.img, phi_init=self.phi_obj, dt=self.dt)
             algo_obj.run_bhattacharya()
+
+        elif self.algo == 'ctrl':
+            algo_obj = optimal_segmentation(img=self.img, phi_init=self.phi_obj, dt=self.dt)
+            algo_obj.run_optimal_segmentation()
 
         elif self.algo == 'ctrl1':
             algo_obj = seg_w_control(img=self.img, phi_init=self.phi_obj, dt=self.dt)
