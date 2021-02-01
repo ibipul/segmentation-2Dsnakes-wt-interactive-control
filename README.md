@@ -3,7 +3,7 @@
 
 Descrption:
  * This repository describes a PDE based `segmentation framework by Level set evolution`.
- * Currently `Chanvesse` , `Yezzi`, and `Bhattacharya` energy functionals are implemented.
+ * Currently `Chanvesse` , `Yezzi`, and `Bhattacharya` energy functionals are implemented, we also provide `interactive feedback-control' implementation.
  * `Freeform initial region selection` is supported. 
  
 Project structure:
@@ -27,6 +27,9 @@ Test Runs:
     s = segmentation(imname='airplane',algo='chanvesse', dt=0.5)
     s.execute()
     
+    s = segmentation(imname='airplane',algo='ctrl1', dt=0.5)
+    s.execute()
+    
    ```
 * Availabe options for imname are: `twoObj`,`zebra`,`airplane`;
-  Availabe options for algos are: `chanvesse`,`yezzi`,`bhattacharya`.
+  Availabe options for algos are: `chanvesse`,`yezzi`,`bhattacharya`,`ctrl1`.
