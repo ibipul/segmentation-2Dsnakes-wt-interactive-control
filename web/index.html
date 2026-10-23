@@ -127,7 +127,7 @@ async function loadOptions() {
     `<button class="img-opt" data-name="${im.name}"><img src="data:image/png;base64,${im.png}" alt="${im.name}">
        <span><code>${im.name}</code><br><span class="muted">${im.width}×${im.height}</span></span></button>`).join("");
   $("algos").innerHTML = data.algos.map((a) =>
-    `<button class="algo" data-name="${a.name}"><b>${a.name}</b><span>${esc(a.label)}</span></button>`).join("");
+    `<button class="algo" data-name="${a.name}"><b>${esc(a.title)}</b><span>${esc(a.label)}</span></button>`).join("");
   document.querySelectorAll(".img-opt").forEach((b) => b.onclick = () => { state.imname = b.dataset.name; refreshChoices(); });
   document.querySelectorAll(".algo").forEach((b) => b.onclick = () => { state.algo = b.dataset.name; refreshChoices(); });
   refreshChoices();

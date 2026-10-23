@@ -50,8 +50,9 @@ ALGOS = {
     "yezzi": "Yezzi: mean separation weighted by region area",
     "bhattacharya": "Bhattacharyya: separates the intensity histograms",
     "ctrl1": "Chan-Vese with interactive feedback control (asks for a region every 200 iterations)",
-    "ctrl": "Optimal segmentation (experimental, not in the README)",
 }
+# Button headings that differ from the algo name passed to the framework.
+TITLES = {"ctrl1": "Ctrl + chanvesse"}
 
 PANEL_INCHES = 4.5  # size of each subplot; the figure is resized to fit the framework's subplot grid
 DPI = 100
@@ -267,7 +268,8 @@ async def options():
             im.convert("L").save(out, format="PNG")
             images.append({"name": name, "file": file, "width": im.width, "height": im.height,
                            "png": base64.b64encode(out.getvalue()).decode()})
-    return JSONResponse({"images": images, "algos": [{"name": k, "label": v} for k, v in ALGOS.items()]})
+    return JSONResponse({"images": images, "algos": [{"name": k, "title": TITLES.get(k, k), "label": v}
+                                                     for k, v in ALGOS.items()]})
 
 
 @app.post("/api/run")

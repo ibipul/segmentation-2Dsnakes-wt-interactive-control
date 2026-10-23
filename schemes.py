@@ -217,7 +217,7 @@ class bhattacharya_functional:
             p_out = self.setup_pdf(self.I[out_pt_indices])
 
             # Computations
-            D =  np.sum(np.sqrt(np.dot(p_in+bhattacharya_functional._eps,p_out+bhattacharya_functional._eps))) # Energy functional
+            D =  np.sum(np.sqrt(np.multiply(p_in+bhattacharya_functional._eps,p_out+bhattacharya_functional._eps))) # Energy functional
 
             # Energy update pieces
             d_T = self.grad_phi(D=D, p_in=p_in, p_out=p_out, a_in=a_in, a_out=a_out, narrow_band=narrow_band)  # grad phi
