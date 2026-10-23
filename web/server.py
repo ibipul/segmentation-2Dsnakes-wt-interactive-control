@@ -13,8 +13,10 @@ leaves the framework untouched and redirects those three calls to the browser in
 
   * plt.pause()      -> render the current figure to a PNG and stream it to the page
   * LassoSelector    -> remember the axes and callback the framework wants a region for
-  * plt.show()       -> send the page a lasso request, wait for the polygon the user draws,
-                        convert it to data coordinates and hand it to the framework's callback
+  * plt.show()       -> for the starting region: send the page a lasso request, wait for the polygon the
+                        user draws, convert it to data coordinates and hand it to the framework's callback.
+                        At the control algorithms' steering checkpoints (every 50 iterations here) it doesn't wait: it hands over any
+                        regions drawn since the last checkpoint, or returns at once.
 """
 
 import asyncio
@@ -49,10 +51,11 @@ ALGOS = {
     "chanvesse": "Chan-Vese: separates mean intensity inside vs outside",
     "yezzi": "Yezzi: mean separation weighted by region area",
     "bhattacharya": "Bhattacharyya: separates the intensity histograms",
-    "ctrl1": "Chan-Vese with interactive feedback control (asks for a region every 200 iterations)",
+    "ctrl1": "Chan-Vese with interactive feedback control (steer any time; applied every 50 iterations)",
+    "ctrl_bhattacharya": "Bhattacharyya with interactive feedback control (steer any time; applied every 50 iterations)",
 }
 # Button headings that differ from the algo name passed to the framework.
-TITLES = {"ctrl1": "Ctrl + chanvesse"}
+TITLES = {"ctrl1": "Control + chanvesse", "ctrl_bhattacharya": "Control + Bhattacharya"}
 
 PANEL_INCHES = 4.5  # size of each subplot; the figure is resized to fit the framework's subplot grid
 DPI = 100
@@ -68,7 +71,9 @@ class Run:
         self.id = uuid.uuid4().hex
         self.imname, self.algo, self.dt = imname, algo, dt
         self.events: queue.Queue = queue.Queue()
-        self.replies: queue.Queue = queue.Queue()  # polygons (or None for "skip") sent back by the page
+        self.replies: queue.Queue = queue.Queue()  # the starting-region polygon sent back by the page
+        self.steering: queue.Queue = queue.Queue()  # steering polygons drawn any time, applied at the next checkpoint
+        self.steer_ready = False
         self.cancel = threading.Event()
         self.pending_lasso = None
         self.lasso_count = 0
@@ -192,10 +197,29 @@ def _show(*args, **kwargs):
     frame = run.emit_frame(lasso.ax.figure, force=True)
     # Where the target axes sit inside the PNG, so the page can outline the area to draw in.
     box = lasso.ax.get_window_extent()
-    area = [box.x0 - frame["x0"], frame["fig_height"] - box.y1 - frame["top"],
-            box.x1 - frame["x0"], frame["fig_height"] - box.y0 - frame["top"]]
-    run.emit({"type": "lasso", "n": run.frames, "area": [round(v, 1) for v in area], "skippable": not first,
-              "prompt": "Draw the starting region" if first else "Draw a region to steer the contour, or skip"})
+    area = [round(v, 1) for v in (box.x0 - frame["x0"], frame["fig_height"] - box.y1 - frame["top"],
+                                  box.x1 - frame["x0"], frame["fig_height"] - box.y0 - frame["top"])]
+
+    if not first:
+        # Steering checkpoint (every seg_w_control._steer_every iterations). Don't wait for the user:
+        # hand over whatever regions they drew since the last checkpoint, or carry on, like closing the window.
+        if not run.steer_ready:
+            run.steer_ready = True
+            run.emit({"type": "steer_ready", "area": area})
+        applied = 0
+        while True:
+            try:
+                points = run.steering.get_nowait()
+            except queue.Empty:
+                break
+            _apply(lasso, frame, points)
+            applied += 1
+        if applied:
+            run.emit({"type": "steer_applied", "count": applied})
+            run.emit({"type": "log", "text": f"(applied {applied} steering region{'s' if applied > 1 else ''})"})
+        return
+
+    run.emit({"type": "lasso", "n": run.frames, "area": area, "prompt": "Draw the starting region"})
     while True:
         run.check_cancel()
         try:
@@ -203,10 +227,12 @@ def _show(*args, **kwargs):
             break
         except queue.Empty:
             continue
-    if points is None:  # skipped: carry on without new input, like closing the desktop window
-        run.emit({"type": "log", "text": "(lasso skipped)"})
-        return
+    _apply(lasso, frame, points)
+
+
+def _apply(lasso, frame, points):
     # PNG pixels (origin top-left, cropped) -> matplotlib display pixels (origin bottom-left) -> data coords.
+    # Steering regions are drawn on an earlier frame; the panel layout is the same in every frame of a run.
     display = [(x + frame["x0"], frame["fig_height"] - (y + frame["top"])) for x, y in points]
     verts = lasso.ax.transData.inverted().transform(display)
     lasso.onselect([tuple(v) for v in verts])
@@ -221,6 +247,11 @@ plt.pause = _pause
 os.chdir(ROOT)
 sys.path.insert(0, str(ROOT))
 from seg_fwk import segmentation  # noqa: E402
+import schemes  # noqa: E402
+
+# In the page steering doesn't pause the run, so check for new regions more often than the desktop default (200).
+# Progress prints stay at the default (seg_w_control._log_every).
+schemes.seg_w_control._steer_every = 50
 
 _lock = threading.Lock()
 _run: Run | None = None
@@ -243,7 +274,7 @@ class RunRequest(BaseModel):
 
 class LassoReply(BaseModel):
     run_id: str
-    points: list[list[float]] | None = None  # None means skip
+    points: list[list[float]]
 
 
 class StopRequest(BaseModel):
@@ -313,10 +344,20 @@ async def start(req: RunRequest):
 async def lasso(reply: LassoReply):
     if _run is None or _run.id != reply.run_id:
         raise HTTPException(404, "That run is no longer active.")
-    if reply.points is not None and len(reply.points) < 3:
+    if len(reply.points) < 3:
         raise HTTPException(400, "A region needs at least 3 points.")
     _run.replies.put(reply.points)
     return {"ok": True}
+
+
+@app.post("/api/steer")
+async def steer(reply: LassoReply):
+    if _run is None or _run.id != reply.run_id or not _run.steer_ready:
+        raise HTTPException(404, "That run is no longer taking steering regions.")
+    if len(reply.points) < 3:
+        raise HTTPException(400, "A region needs at least 3 points.")
+    _run.steering.put(reply.points)
+    return {"queued": _run.steering.qsize()}
 
 
 @app.post("/api/stop")

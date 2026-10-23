@@ -24,6 +24,9 @@
   .page { max-width: 1320px; margin: 0 auto; padding: 24px 16px 64px; }
   header h1 { margin: 0 0 4px; font-size: 22px; }
   header p { margin: 0 0 20px; color: var(--muted); max-width: 90ch; }
+  .howto { margin: 0 0 20px; padding-left: 22px; color: var(--muted); max-width: 90ch; }
+  .howto li { margin-bottom: 4px; }
+  .howto b { color: var(--text); }
   .layout { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 16px; align-items: start; }
   @media (max-width: 960px) { .layout { grid-template-columns: minmax(0, 1fr); } }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; margin-bottom: 16px; }
@@ -52,6 +55,7 @@
   .b-bad { background: var(--bad-soft); color: var(--bad); } .b-info { background: var(--accent-soft); color: var(--accent); }
   .banner { border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
   .banner.warn { background: var(--warn-soft); color: var(--warn); }
+  .banner.info { background: var(--accent-soft); color: var(--accent); }
   .banner.bad { background: var(--bad-soft); color: var(--bad); white-space: pre-wrap; font: 12.5px/1.5 var(--mono); }
   .banner b { flex: 1 1 auto; }
   .stage { position: relative; display: inline-block; max-width: 100%; background: #fff; border-radius: 6px; line-height: 0; }
@@ -68,8 +72,15 @@
 <div class="page">
   <header>
     <h1>Level-set segmentation</h1>
-    <p>Runs the framework in this repo exactly as the README shows and draws its matplotlib figures here instead of a desktop window.
-       Wherever the framework would open a lasso, you draw the region on the image in this page.</p>
+    <ol class="howto">
+      <li>Pick an image and an algorithm. Leave <code>dt</code> at 0.5 unless you want bigger or smaller steps.</li>
+      <li>Press <b>Run</b>, then draw the starting region on the image: press, drag around the object, release.
+          The contour then evolves live.</li>
+      <li>With <b>Control + chanvesse</b> or <b>Control + Bhattacharya</b>, you can steer the contour while it runs.
+          Draw a region on the outlined image around an area that should be inside the object. It shows as a dashed
+          yellow outline and is applied at the next checkpoint (every 50 iterations).</li>
+      <li>Press <b>Stop</b> to end a run, or <b>Run</b> again to start over.</li>
+    </ol>
   </header>
 
   <div class="layout">
@@ -108,7 +119,8 @@
 
 <script>
 const $ = (id) => document.getElementById(id);
-const state = { imname: "twoObj", algo: "chanvesse", runId: null, abort: null, lasso: null, lastLine: "", frames: 0 };
+const state = { imname: "twoObj", algo: "chanvesse", runId: null, abort: null, lasso: null, steer: null,
+                queued: [], stroke: null, lastLine: "", frames: 0 };
 
 function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 
@@ -157,78 +169,114 @@ function showFrame(ev) {
   ensureStage(ev.width, ev.height);
   $("frame").src = "data:image/png;base64," + ev.png;
   state.frames = ev.n;
-  if (!state.lasso) drawOverlay();
+  drawOverlay();
 }
 
-function drawOverlay(points) {
+// Where the user may draw right now: the starting region (run waits), or a steering region (run keeps going).
+function activeArea() { return state.lasso ? state.lasso.area : state.steer ? state.steer.area : null; }
+
+function tracePath(g, pts) {
+  g.beginPath(); g.moveTo(pts[0][0], pts[0][1]);
+  for (const p of pts.slice(1)) g.lineTo(p[0], p[1]);
+  g.closePath();
+}
+
+function drawOverlay() {
   const c = $("overlay"); if (!c) return;
   const g = c.getContext("2d");
   g.clearRect(0, 0, c.width, c.height);
-  const l = state.lasso; if (!l) return;
-  const [x0, y0, x1, y1] = l.area;
-  // Dim everything outside the axes the framework wants a region in.
-  g.fillStyle = "rgba(0,0,0,0.35)";
-  g.fillRect(0, 0, c.width, y0); g.fillRect(0, y1, c.width, c.height - y1);
-  g.fillRect(0, y0, x0, y1 - y0); g.fillRect(x1, y0, c.width - x1, y1 - y0);
-  g.strokeStyle = "#2f6fde"; g.lineWidth = 2; g.setLineDash([6, 4]); g.strokeRect(x0, y0, x1 - x0, y1 - y0); g.setLineDash([]);
-  if (points && points.length > 1) {
-    g.beginPath(); g.moveTo(points[0][0], points[0][1]);
-    for (const p of points.slice(1)) g.lineTo(p[0], p[1]);
+  $("stage").classList.toggle("drawing", !!activeArea());
+  const area = activeArea(); if (!area) return;
+  const [x0, y0, x1, y1] = area;
+  if (state.lasso) {
+    // Dim everything outside the axes the framework wants the starting region in.
+    g.fillStyle = "rgba(0,0,0,0.35)";
+    g.fillRect(0, 0, c.width, y0); g.fillRect(0, y1, c.width, c.height - y1);
+    g.fillRect(0, y0, x0, y1 - y0); g.fillRect(x1, y0, c.width - x1, y1 - y0);
+  }
+  g.strokeStyle = "#2f6fde"; g.lineWidth = 2; g.setLineDash([6, 4]); g.strokeRect(x0, y0, x1 - x0, y1 - y0);
+  // Steering regions waiting for the next checkpoint.
+  for (const pts of state.queued) {
+    tracePath(g, pts); g.fillStyle = "rgba(255,212,0,0.15)"; g.fill();
+    g.strokeStyle = "#ffd400"; g.lineWidth = 2; g.stroke();
+  }
+  g.setLineDash([]);
+  if (state.stroke && state.stroke.length > 1) {
+    tracePath(g, state.stroke); g.fillStyle = "rgba(255,212,0,0.18)"; g.fill();
     g.strokeStyle = "#ffd400"; g.lineWidth = 2.5; g.stroke();
-    g.fillStyle = "rgba(255,212,0,0.18)"; g.fill();
   }
 }
 
 function attachDrawing(canvas) {
-  let pts = null;
-  const toPx = (e) => {
+  const toPx = (e, area) => {
     const r = canvas.getBoundingClientRect();
-    const [x0, y0, x1, y1] = state.lasso.area;
+    const [x0, y0, x1, y1] = area;
     const x = (e.clientX - r.left) * canvas.width / r.width, y = (e.clientY - r.top) * canvas.height / r.height;
     return [Math.min(Math.max(x, x0), x1), Math.min(Math.max(y, y0), y1)];
   };
   canvas.addEventListener("pointerdown", (e) => {
-    if (!state.lasso) return;
-    canvas.setPointerCapture(e.pointerId); pts = [toPx(e)];
+    const area = activeArea(); if (!area) return;
+    canvas.setPointerCapture(e.pointerId); state.stroke = [toPx(e, area)];
   });
   canvas.addEventListener("pointermove", (e) => {
-    if (!pts) return;
-    const p = toPx(e), q = pts[pts.length - 1];
-    if (Math.hypot(p[0] - q[0], p[1] - q[1]) >= 2) { pts.push(p); drawOverlay(pts); }
+    const area = activeArea();
+    if (!state.stroke || !area) return;
+    const p = toPx(e, area), q = state.stroke[state.stroke.length - 1];
+    if (Math.hypot(p[0] - q[0], p[1] - q[1]) >= 2) { state.stroke.push(p); drawOverlay(); }
   });
   const finish = () => {
-    if (!pts) return;
-    const done = pts; pts = null;
+    if (!state.stroke) return;
+    const done = state.stroke; state.stroke = null;
     if (done.length < 3) { drawOverlay(); return; }
-    submitLasso(done); // like the desktop LassoSelector: releasing the mouse hands the region to the framework
+    // Like the desktop LassoSelector: releasing the mouse hands the region over.
+    if (state.lasso) submitLasso(done);
+    else if (state.steer) submitSteer(done);
+    else drawOverlay();
   };
   canvas.addEventListener("pointerup", finish);
-  canvas.addEventListener("pointercancel", () => { pts = null; drawOverlay(); });
+  canvas.addEventListener("pointercancel", () => { state.stroke = null; drawOverlay(); });
 }
 
 function askLasso(ev) {
   state.lasso = ev;
   ensureStage(...frameSize());
-  $("stage").classList.add("drawing");
-  $("prompt").innerHTML = `<div class="banner warn"><b>${esc(ev.prompt)}: press and drag inside the outlined panel, then release.</b>
-    ${ev.skippable ? '<button class="secondary" id="skip">Skip</button>' : ""}</div>`;
-  if (ev.skippable) $("skip").onclick = () => submitLasso(null);
-  setStatus("waiting for you", "b-warn", ev.skippable ? "The run is paused until you draw a region or skip." : "The run starts once you draw the starting region.");
+  $("prompt").innerHTML = `<div class="banner warn"><b>${esc(ev.prompt)}. Press and drag inside the outlined panel, then release.</b></div>`;
+  setStatus("waiting for you", "b-warn", "The run starts once you draw the starting region.");
   drawOverlay();
 }
 
 function frameSize() { const c = $("overlay"); return [c.width, c.height]; }
 
+const rounded = (points) => points.map(([x, y]) => [Math.round(x * 10) / 10, Math.round(y * 10) / 10]);
+
 async function submitLasso(points) {
   const runId = state.runId;
   state.lasso = null;
   $("prompt").innerHTML = "";
-  $("stage")?.classList.remove("drawing");
   drawOverlay();
-  setStatus("running", "b-info", points ? "Region sent to the framework." : "Skipped.");
+  setStatus("running", "b-info", "Region sent to the framework.");
   const res = await fetch("/api/lasso", { method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ run_id: runId, points: points && points.map(([x, y]) => [Math.round(x * 10) / 10, Math.round(y * 10) / 10]) }) });
+    body: JSON.stringify({ run_id: runId, points: rounded(points) }) });
   if (!res.ok) setStatus("error", "b-bad", (await res.json()).detail || res.statusText);
+}
+
+function steerBanner() {
+  const n = state.queued.length;
+  $("prompt").innerHTML = `<div class="banner info"><b>To steer the contour, draw a region on the outlined image around an area
+    that should be inside the object, any time. It's applied at the next checkpoint (every 50 iterations).</b>
+    <span>${n ? `${n} region${n > 1 ? "s" : ""} waiting` : ""}</span></div>`;
+}
+
+async function submitSteer(points) {
+  state.queued.push(points);
+  drawOverlay(); steerBanner();
+  const res = await fetch("/api/steer", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ run_id: state.runId, points: rounded(points) }) });
+  if (!res.ok) {
+    state.queued = state.queued.filter((q) => q !== points);
+    drawOverlay(); steerBanner();
+    appendLog("(steering region not sent: " + ((await res.json()).detail || res.statusText) + ")");
+  }
 }
 
 // ---------------------------------------------------------------- running
@@ -242,7 +290,8 @@ function appendLog(line) {
 async function run() {
   if (state.abort) state.abort.abort();
   const abort = state.abort = new AbortController();
-  state.lasso = null; state.runId = null; state.frames = 0; state.lastLine = "";
+  state.lasso = null; state.steer = null; state.queued = []; state.stroke = null;
+  state.runId = null; state.frames = 0; state.lastLine = "";
   $("prompt").innerHTML = ""; $("log").textContent = "";
   $("viewer").innerHTML = `<div class="empty"><span class="spinner"></span> Starting…</div>`;
   $("stop").disabled = false;
@@ -283,12 +332,18 @@ function handle(ev) {
       if (!state.lasso) setStatus("running", "b-info", `${state.lastLine || "running"} · frame ${ev.n} · ${ev.elapsed}s`);
       break;
     case "lasso": askLasso(ev); break;
+    case "steer_ready": state.steer = ev; steerBanner(); drawOverlay(); break;
+    case "steer_applied":
+      state.queued.splice(0, ev.count);
+      steerBanner(); drawOverlay();
+      break;
     case "error":
       $("prompt").innerHTML = `<div class="banner bad">${esc(ev.traceback || ev.message)}</div>`;
       appendLog(ev.message);
       break;
     case "done": {
-      state.lasso = null; $("stage")?.classList.remove("drawing"); drawOverlay();
+      state.lasso = null; state.steer = null; state.queued = []; state.stroke = null;
+      if ($("stage")) drawOverlay();
       if (ev.status !== "error") $("prompt").innerHTML = "";
       const label = { finished: ["finished", "b-ok"], stopped: ["stopped", "b-warn"], error: ["error", "b-bad"] }[ev.status];
       setStatus(label[0], label[1], `${state.lastLine ? state.lastLine + " · " : ""}${state.frames} frames · ${ev.elapsed}s`);

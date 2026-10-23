@@ -260,6 +260,8 @@ class seg_w_control:
     _PHI_UPPER = +2
     _eps = 2.2204e-16
     _iter = 5000
+    _steer_every = 200  # iterations between user-input (lasso) checkpoints; a multiple of 10
+    _log_every = 200  # iterations between progress prints; a multiple of 10
     _alpha = 0.00001
     _tol = 1e-18
 
@@ -379,8 +381,9 @@ class seg_w_control:
 
 
                 ppl.pause(0.001)
-                if s % 200 == 0:
+                if s % self._log_every == 0:
                     print(s, 'mu_in:: ', mu_in, ' mu_out::', mu_out, 'U in: ', len(in_pt_indices_U[0]), 'U_out: ', len(out_pt_indices_U[0]),' U sum: ', self.U.sum())
+                if s % self._steer_every == 0:
                     x, y = np.meshgrid(np.arange(self.I.shape[1]), np.arange(self.I.shape[0]))
                     pix = np.vstack((x.flatten(), y.flatten())).T
 
@@ -416,6 +419,28 @@ class seg_w_control:
         base = np.zeros(phi.shape)
         base[in_pt_indices] = 1
         return base
+
+
+class bhattacharya_w_control(seg_w_control):
+    # Same control loop as seg_w_control; only the energy term G is the Bhattacharyya flow instead of Chan-Vese.
+
+    def grad_phi(self, mu_in, mu_out, narrow_band):
+        # Inside is phi > 0 here, since seg_w_control negates phi
+        in_pt_indices = np.where(self.phi > 0)
+        out_pt_indices = np.where(self.phi < 0)
+        a_in = len(in_pt_indices[0])
+        a_out = len(out_pt_indices[0])
+        p_in = bhattacharya_functional.setup_pdf(self, self.I[in_pt_indices])
+        p_out = bhattacharya_functional.setup_pdf(self, self.I[out_pt_indices])
+        D = np.sum(np.sqrt(np.multiply(p_in + bhattacharya_functional._eps, p_out + bhattacharya_functional._eps)))
+
+        # Negated phi flips the flow's sign, as seg_w_control.grad_phi does for Chan-Vese
+        d_T = np.zeros(self.phi.shape)
+        d_T[narrow_band] = -1 * bhattacharya_functional.grad_phi(self, D=D, p_in=p_in, p_out=p_out,
+                                                                 a_in=a_in, a_out=a_out, narrow_band=narrow_band)
+        # run() adds curvature unweighted and normalizes the step, so dividing G by _alpha gives
+        # curvature the same relative weight it has in bhattacharya_functional
+        return d_T / bhattacharya_functional._alpha
 
 
 class optimal_segmentation:

@@ -1,5 +1,5 @@
 from initialize_phi import phi as ph
-from schemes import  chanvesse_functional, yezzi_functional, bhattacharya_functional,seg_w_control,optimal_segmentation
+from schemes import  chanvesse_functional, yezzi_functional, bhattacharya_functional,seg_w_control,bhattacharya_w_control,optimal_segmentation
 import numpy as np
 from PIL import Image
 class segmentation:
@@ -41,4 +41,8 @@ class segmentation:
 
         elif self.algo == 'ctrl1':
             algo_obj = seg_w_control(img=self.img, phi_init=self.phi_obj, dt=self.dt)
+            algo_obj.run()
+
+        elif self.algo == 'ctrl_bhattacharya':
+            algo_obj = bhattacharya_w_control(img=self.img, phi_init=self.phi_obj, dt=self.dt)
             algo_obj.run()
