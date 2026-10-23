@@ -1,6 +1,6 @@
 # Level Set Segmentation Framework
 
-### aka Snakes
+> ### *also known as Snakes*
 
 PDE-based image segmentation by level set evolution, with interactive feedback control and a browser view to watch the contour evolve live.
 
