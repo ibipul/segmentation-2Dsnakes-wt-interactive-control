@@ -6,7 +6,7 @@ from matplotlib import pyplot as ppl
 from matplotlib.path import Path
 from matplotlib.widgets import LassoSelector
 from scipy.signal import medfilt
-from scipy.ndimage.filters import gaussian_filter
+from scipy.ndimage import gaussian_filter
 
 class chanvesse_functional:
     _PHI_LOWER = -2

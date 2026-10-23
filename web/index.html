@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Level-set Segmentation</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='2' width='28' height='28' rx='6' fill='%23444'/%3E%3Cpath d='M9 20c0-7 4-11 9-11s6 5 3 8-1 7-5 7-7-1-7-4z' fill='none' stroke='%23e5483b' stroke-width='2.5'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --text: #1d2330; --muted: #5d6677; --line: #e1e4ea;
+    --accent: #2f6fde; --accent-soft: #e8f0fd; --ok: #1f8a4c; --ok-soft: #e5f5ec;
+    --warn: #b25e09; --warn-soft: #fdf1e3; --bad: #c0362c; --bad-soft: #fbe9e7;
+    --code: #f1f3f6; --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151b; --card: #1a1e26; --text: #e4e7ec; --muted: #9aa3b2; --line: #2b313c;
+      --accent: #6d9ff0; --accent-soft: #1d2a40; --ok: #5cc98a; --ok-soft: #173024;
+      --warn: #e9a352; --warn-soft: #34261a; --bad: #ef7b70; --bad-soft: #3a1f1d; --code: #222733;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .page { max-width: 1320px; margin: 0 auto; padding: 24px 16px 64px; }
+  header h1 { margin: 0 0 4px; font-size: 22px; }
+  header p { margin: 0 0 20px; color: var(--muted); max-width: 90ch; }
+  .layout { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 16px; align-items: start; }
+  @media (max-width: 960px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; margin-bottom: 16px; }
+  .card h2 { margin: 0 0 12px; font-size: 16px; display: flex; align-items: center; gap: 10px; }
+  .num { display: inline-flex; width: 24px; height: 24px; border-radius: 50%; align-items: center; justify-content: center;
+         background: var(--accent-soft); color: var(--accent); font-size: 13px; font-weight: 600; flex: none; }
+  .muted { color: var(--muted); font-size: 13px; }
+  label.field { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 6px; }
+  .images { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .img-opt { border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 6px; cursor: pointer; color: var(--text); font: inherit; text-align: center; }
+  .img-opt img { width: 100%; aspect-ratio: 1; object-fit: contain; display: block; image-rendering: pixelated; border-radius: 4px; background: #000; }
+  .img-opt span { display: block; font-size: 12px; margin-top: 4px; }
+  .img-opt.on, .algo.on { border-color: var(--accent); background: var(--accent-soft); }
+  .algo { display: block; width: 100%; text-align: left; border: 1px solid var(--line); background: var(--bg); color: var(--text);
+          border-radius: 8px; padding: 7px 10px; margin-bottom: 6px; cursor: pointer; font: inherit; }
+  .algo b { font: 600 13px var(--mono); } .algo span { display: block; color: var(--muted); font-size: 12px; }
+  input[type=number] { width: 90px; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; background: var(--bg); color: var(--text); font: 14px var(--mono); }
+  .row { display: flex; align-items: center; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+  button.primary { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 9px 18px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  button.secondary { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px 16px; font-size: 14px; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  pre.code { background: var(--code); border-radius: 8px; padding: 10px 12px; font: 12.5px/1.6 var(--mono); overflow-x: auto; margin: 0; }
+  .status { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; font-size: 14px; }
+  .badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--code); color: var(--muted); }
+  .b-ok { background: var(--ok-soft); color: var(--ok); } .b-warn { background: var(--warn-soft); color: var(--warn); }
+  .b-bad { background: var(--bad-soft); color: var(--bad); } .b-info { background: var(--accent-soft); color: var(--accent); }
+  .banner { border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .banner.warn { background: var(--warn-soft); color: var(--warn); }
+  .banner.bad { background: var(--bad-soft); color: var(--bad); white-space: pre-wrap; font: 12.5px/1.5 var(--mono); }
+  .banner b { flex: 1 1 auto; }
+  .stage { position: relative; display: inline-block; max-width: 100%; background: #fff; border-radius: 6px; line-height: 0; }
+  .stage img { max-width: 100%; height: auto; display: block; }
+  .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+  .stage.drawing canvas { cursor: crosshair; }
+  .empty { color: var(--muted); font-style: italic; padding: 40px 0; }
+  .log { background: var(--code); border-radius: 8px; padding: 10px 12px; font: 12px/1.55 var(--mono); max-height: 260px; overflow: auto; white-space: pre; margin: 0; }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>Level-set segmentation</h1>
+    <p>Runs the framework in this repo exactly as the README shows and draws its matplotlib figures here instead of a desktop window.
+       Wherever the framework would open a lasso, you draw the region on the image in this page.</p>
+  </header>
+
+  <div class="layout">
+    <aside>
+      <div class="card">
+        <h2><span class="num">1</span>Set up a run</h2>
+        <label class="field">Image (<code>imname</code>)</label>
+        <div class="images" id="images"></div>
+        <label class="field">Algorithm (<code>algo</code>)</label>
+        <div id="algos"></div>
+        <label class="field" for="dt">Time step (<code>dt</code>)</label>
+        <input type="number" id="dt" value="0.5" min="0.05" max="5" step="0.05">
+        <div class="row">
+          <button class="primary" id="run">Run</button>
+          <button class="secondary" id="stop" disabled>Stop</button>
+        </div>
+        <label class="field">Python this runs</label>
+        <pre class="code" id="snippet"></pre>
+      </div>
+    </aside>
+
+    <main>
+      <div class="card">
+        <h2><span class="num">2</span>Live view</h2>
+        <div class="status" id="status"><span class="badge">idle</span><span class="muted">Pick an image and algorithm, then press Run.</span></div>
+        <div id="prompt"></div>
+        <div id="viewer"><div class="empty">No run yet.</div></div>
+      </div>
+      <div class="card">
+        <h2><span class="num">3</span>Framework output</h2>
+        <pre class="log" id="log">(print output from the framework appears here)</pre>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const state = { imname: "twoObj", algo: "chanvesse", runId: null, abort: null, lasso: null, lastLine: "", frames: 0 };
+
+function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+function snippet() {
+  $("snippet").textContent =
+    `from seg_fwk import segmentation\n\ns = segmentation(imname='${state.imname}', algo='${state.algo}', dt=${Number($("dt").value)})\ns.execute()`;
+}
+
+function setStatus(badge, cls, text) {
+  $("status").innerHTML = `<span class="badge ${cls}">${esc(badge)}</span><span class="muted">${esc(text)}</span>`;
+}
+
+async function loadOptions() {
+  const data = await (await fetch("/api/options")).json();
+  $("images").innerHTML = data.images.map((im) =>
+    `<button class="img-opt" data-name="${im.name}"><img src="data:image/png;base64,${im.png}" alt="${im.name}">
+       <span><code>${im.name}</code><br><span class="muted">${im.width}×${im.height}</span></span></button>`).join("");
+  $("algos").innerHTML = data.algos.map((a) =>
+    `<button class="algo" data-name="${a.name}"><b>${a.name}</b><span>${esc(a.label)}</span></button>`).join("");
+  document.querySelectorAll(".img-opt").forEach((b) => b.onclick = () => { state.imname = b.dataset.name; refreshChoices(); });
+  document.querySelectorAll(".algo").forEach((b) => b.onclick = () => { state.algo = b.dataset.name; refreshChoices(); });
+  refreshChoices();
+}
+
+function refreshChoices() {
+  document.querySelectorAll(".img-opt").forEach((b) => b.classList.toggle("on", b.dataset.name === state.imname));
+  document.querySelectorAll(".algo").forEach((b) => b.classList.toggle("on", b.dataset.name === state.algo));
+  snippet();
+}
+$("dt").oninput = snippet;
+
+// ---------------------------------------------------------------- viewer and lasso drawing
+function ensureStage(width, height) {
+  let stage = $("stage");
+  if (!stage) {
+    $("viewer").innerHTML = `<div class="stage" id="stage"><img id="frame" alt="current figure"><canvas id="overlay"></canvas></div>`;
+    stage = $("stage");
+    attachDrawing($("overlay"));
+  }
+  const canvas = $("overlay");
+  if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
+  return stage;
+}
+
+function showFrame(ev) {
+  ensureStage(ev.width, ev.height);
+  $("frame").src = "data:image/png;base64," + ev.png;
+  state.frames = ev.n;
+  if (!state.lasso) drawOverlay();
+}
+
+function drawOverlay(points) {
+  const c = $("overlay"); if (!c) return;
+  const g = c.getContext("2d");
+  g.clearRect(0, 0, c.width, c.height);
+  const l = state.lasso; if (!l) return;
+  const [x0, y0, x1, y1] = l.area;
+  // Dim everything outside the axes the framework wants a region in.
+  g.fillStyle = "rgba(0,0,0,0.35)";
+  g.fillRect(0, 0, c.width, y0); g.fillRect(0, y1, c.width, c.height - y1);
+  g.fillRect(0, y0, x0, y1 - y0); g.fillRect(x1, y0, c.width - x1, y1 - y0);
+  g.strokeStyle = "#2f6fde"; g.lineWidth = 2; g.setLineDash([6, 4]); g.strokeRect(x0, y0, x1 - x0, y1 - y0); g.setLineDash([]);
+  if (points && points.length > 1) {
+    g.beginPath(); g.moveTo(points[0][0], points[0][1]);
+    for (const p of points.slice(1)) g.lineTo(p[0], p[1]);
+    g.strokeStyle = "#ffd400"; g.lineWidth = 2.5; g.stroke();
+    g.fillStyle = "rgba(255,212,0,0.18)"; g.fill();
+  }
+}
+
+function attachDrawing(canvas) {
+  let pts = null;
+  const toPx = (e) => {
+    const r = canvas.getBoundingClientRect();
+    const [x0, y0, x1, y1] = state.lasso.area;
+    const x = (e.clientX - r.left) * canvas.width / r.width, y = (e.clientY - r.top) * canvas.height / r.height;
+    return [Math.min(Math.max(x, x0), x1), Math.min(Math.max(y, y0), y1)];
+  };
+  canvas.addEventListener("pointerdown", (e) => {
+    if (!state.lasso) return;
+    canvas.setPointerCapture(e.pointerId); pts = [toPx(e)];
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!pts) return;
+    const p = toPx(e), q = pts[pts.length - 1];
+    if (Math.hypot(p[0] - q[0], p[1] - q[1]) >= 2) { pts.push(p); drawOverlay(pts); }
+  });
+  const finish = () => {
+    if (!pts) return;
+    const done = pts; pts = null;
+    if (done.length < 3) { drawOverlay(); return; }
+    submitLasso(done); // like the desktop LassoSelector: releasing the mouse hands the region to the framework
+  };
+  canvas.addEventListener("pointerup", finish);
+  canvas.addEventListener("pointercancel", () => { pts = null; drawOverlay(); });
+}
+
+function askLasso(ev) {
+  state.lasso = ev;
+  ensureStage(...frameSize());
+  $("stage").classList.add("drawing");
+  $("prompt").innerHTML = `<div class="banner warn"><b>${esc(ev.prompt)}: press and drag inside the outlined panel, then release.</b>
+    ${ev.skippable ? '<button class="secondary" id="skip">Skip</button>' : ""}</div>`;
+  if (ev.skippable) $("skip").onclick = () => submitLasso(null);
+  setStatus("waiting for you", "b-warn", ev.skippable ? "The run is paused until you draw a region or skip." : "The run starts once you draw the starting region.");
+  drawOverlay();
+}
+
+function frameSize() { const c = $("overlay"); return [c.width, c.height]; }
+
+async function submitLasso(points) {
+  const runId = state.runId;
+  state.lasso = null;
+  $("prompt").innerHTML = "";
+  $("stage")?.classList.remove("drawing");
+  drawOverlay();
+  setStatus("running", "b-info", points ? "Region sent to the framework." : "Skipped.");
+  const res = await fetch("/api/lasso", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ run_id: runId, points: points && points.map(([x, y]) => [Math.round(x * 10) / 10, Math.round(y * 10) / 10]) }) });
+  if (!res.ok) setStatus("error", "b-bad", (await res.json()).detail || res.statusText);
+}
+
+// ---------------------------------------------------------------- running
+function appendLog(line) {
+  const log = $("log");
+  const atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 4;
+  log.textContent += line + "\n";
+  if (atBottom) log.scrollTop = log.scrollHeight;
+}
+
+async function run() {
+  if (state.abort) state.abort.abort();
+  const abort = state.abort = new AbortController();
+  state.lasso = null; state.runId = null; state.frames = 0; state.lastLine = "";
+  $("prompt").innerHTML = ""; $("log").textContent = "";
+  $("viewer").innerHTML = `<div class="empty"><span class="spinner"></span> Starting…</div>`;
+  $("stop").disabled = false;
+  setStatus("starting", "b-info", "");
+  let res;
+  try {
+    res = await fetch("/api/run", { method: "POST", headers: { "Content-Type": "application/json" }, signal: abort.signal,
+      body: JSON.stringify({ imname: state.imname, algo: state.algo, dt: Number($("dt").value) }) });
+  } catch (e) { if (e.name !== "AbortError") setStatus("error", "b-bad", String(e)); return; }
+  if (!res.ok) { setStatus("error", "b-bad", (await res.json()).detail || res.statusText); $("stop").disabled = true; return; }
+
+  const reader = res.body.getReader(), decoder = new TextDecoder();
+  let buf = "";
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, i); buf = buf.slice(i + 1);
+        if (line.trim()) handle(JSON.parse(line));
+      }
+    }
+  } catch (e) { if (e.name !== "AbortError") setStatus("error", "b-bad", "Lost the connection to the server: " + e); }
+  if (state.abort === abort) $("stop").disabled = true;
+}
+
+function handle(ev) {
+  switch (ev.type) {
+    case "run": state.runId = ev.run_id; break;
+    case "log":
+      appendLog(ev.text);
+      if (/^\d+\s/.test(ev.text)) state.lastLine = "iteration " + ev.text.split(/\s+/)[0];
+      break;
+    case "frame":
+      showFrame(ev);
+      if (!state.lasso) setStatus("running", "b-info", `${state.lastLine || "running"} · frame ${ev.n} · ${ev.elapsed}s`);
+      break;
+    case "lasso": askLasso(ev); break;
+    case "error":
+      $("prompt").innerHTML = `<div class="banner bad">${esc(ev.traceback || ev.message)}</div>`;
+      appendLog(ev.message);
+      break;
+    case "done": {
+      state.lasso = null; $("stage")?.classList.remove("drawing"); drawOverlay();
+      if (ev.status !== "error") $("prompt").innerHTML = "";
+      const label = { finished: ["finished", "b-ok"], stopped: ["stopped", "b-warn"], error: ["error", "b-bad"] }[ev.status];
+      setStatus(label[0], label[1], `${state.lastLine ? state.lastLine + " · " : ""}${state.frames} frames · ${ev.elapsed}s`);
+      $("stop").disabled = true;
+      break;
+    }
+  }
+}
+
+$("run").onclick = run;
+$("stop").onclick = async () => {
+  if (!state.runId) return;
+  $("stop").disabled = true;
+  setStatus("stopping", "b-warn", "Stops at the framework's next frame.");
+  await fetch("/api/stop", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ run_id: state.runId }) });
+};
+
+loadOptions();
+</script>
+</body>
+</html>

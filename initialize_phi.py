@@ -1,4 +1,4 @@
-from scipy.ndimage.morphology import distance_transform_edt as distance
+from scipy.ndimage import distance_transform_edt as distance
 import matplotlib.pyplot as plt
 from matplotlib.path import Path
 from matplotlib.widgets import LassoSelector

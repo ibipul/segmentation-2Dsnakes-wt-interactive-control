@@ -1,6 +1,7 @@
 from initialize_phi import phi as ph
 from schemes import  chanvesse_functional, yezzi_functional, bhattacharya_functional,seg_w_control,optimal_segmentation
-import scipy.ndimage
+import numpy as np
+from PIL import Image
 class segmentation:
 
     def __init__(self, imname, algo,dt):
@@ -14,11 +15,11 @@ class segmentation:
 
     def get_image(self):
         if self.imname == 'airplane':
-            img = scipy.ndimage.imread('airplane.png')
+            img = np.array(Image.open('airplane.png'))
         elif self.imname == 'zebra':
-            img = scipy.ndimage.imread('zebra.bmp')
+            img = np.array(Image.open('zebra.bmp'))
         elif self.imname == 'twoObj':
-            img = scipy.ndimage.imread('twoObj.bmp')
+            img = np.array(Image.open('twoObj.bmp'))
         return img
 
     def execute(self):
