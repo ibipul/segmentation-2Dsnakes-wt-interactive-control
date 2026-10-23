@@ -16,12 +16,21 @@ PDE-based image segmentation by level set evolution, with interactive feedback c
 ![The browser view during a Control + Bhattacharya run on zebra](docs/web-view.png)
 <sub>The browser view during a Control + Bhattacharya run on `zebra`: the contour (left), `phi`, `phi_hat` and the user input `U`, with the framework's output below.</sub>
 
+## Quick start
+
+```bash
+git clone https://github.com/ibipul/segmentation-2Dsnakes-wt-interactive-control.git
+cd segmentation-2Dsnakes-wt-interactive-control
+./run.sh
+```
+
+Requires Python 3.11 or newer. The first run creates a virtual environment in `.venv` and installs the pinned packages from `requirements.txt`. The page then opens at **http://localhost:8090**, or the next free port; the terminal prints the address. Keep the terminal open while you use the page, and press Ctrl+C there to stop.
+
 ---
 
 ## Contents
 
 - [Features](#features)
-- [Quick start](#quick-start)
 - [Using the browser view](#using-the-browser-view)
 - [Running from Python](#running-from-python)
 - [Algorithms](#algorithms)
@@ -38,16 +47,6 @@ PDE-based image segmentation by level set evolution, with interactive feedback c
 - **Interactive steering:** with the Control algorithms, mark areas that belong inside the object while the contour evolves.
 - **Browser view:** one command sets everything up and streams the evolution to a web page.
 - **Pluggable schemes:** each functional is a self-contained class in `schemes.py`.
-
-## Quick start
-
-```bash
-git clone https://github.com/ibipul/segmentation-2Dsnakes-wt-interactive-control.git
-cd segmentation-2Dsnakes-wt-interactive-control
-./run.sh
-```
-
-Requires Python 3.11 or newer. The first run creates a virtual environment in `.venv` and installs the pinned packages from `requirements.txt`. The page then opens at **http://localhost:8090**, or the next free port; the terminal prints the address. Keep the terminal open while you use the page, and press Ctrl+C there to stop.
 
 ## Using the browser view
 
