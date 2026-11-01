@@ -144,9 +144,9 @@ Your steering regions move `phi_hat`, and `phi_hat` pulls the contour toward the
 ├── wasm/
 │   ├── bridge.py        # the in-browser counterpart of server.py (runs under Pyodide)
 │   ├── worker.js        # Web Worker that loads Pyodide and runs the framework
-│   ├── index.html       # the GitHub Pages demo (fetches the .py files and images above)
-│   └── coi-serviceworker.js  # enables shared memory on Pages, so Stop and steering work live
-├── index.html           # redirects the Pages root to wasm/
+│   └── index.html       # redirects old /wasm/ links to the root page
+├── index.html           # the GitHub Pages demo (fetches the .py files and images above)
+├── coi-serviceworker.js # enables shared memory on Pages, so Stop and steering work live (must sit at the root to cover index.html)
 ├── docs/web-view.png    # screenshot used in this README
 └── airplane.png, twoObj.bmp, zebra.bmp   # sample images
 ```
@@ -163,13 +163,13 @@ Your steering regions move `phi_hat`, and `phi_hat` pulls the contour toward the
 
 ### Testing the WebAssembly demo locally
 
-`./run.sh` (the `web/` page) is the offline route. To try the Pages version on your machine, serve the repo root with any static server and open `/wasm/`:
+`./run.sh` (the `web/` page) is the offline route. To try the Pages version on your machine, serve the repo root with any static server and open the root page:
 
 ```bash
-python3 -m http.server 8000   # then open http://localhost:8000/wasm/
+python3 -m http.server 8000   # then open http://localhost:8000/
 ```
 
-Without the cross-origin isolation headers this plain server lacks, the demo falls back to a mode with no live steering or instant Stop. GitHub Pages gets them from `wasm/coi-serviceworker.js`.
+Without the cross-origin isolation headers this plain server lacks, the demo falls back to a mode with no live steering or instant Stop. GitHub Pages gets them from `coi-serviceworker.js`.
 
 ## Troubleshooting
 
