@@ -46,17 +46,6 @@ from pydantic import BaseModel  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 
-IMAGES = {"twoObj": "twoObj.bmp", "zebra": "zebra.bmp", "airplane": "airplane.png"}
-ALGOS = {
-    "chanvesse": "Chan-Vese: separates mean intensity inside vs outside",
-    "yezzi": "Yezzi: mean separation weighted by region area",
-    "bhattacharya": "Bhattacharyya: separates the intensity histograms",
-    "ctrl1": "Chan-Vese with interactive feedback control (steer any time; applied every 50 iterations)",
-    "ctrl_bhattacharya": "Bhattacharyya with interactive feedback control (steer any time; applied every 50 iterations)",
-}
-# Button headings that differ from the algo name passed to the framework.
-TITLES = {"ctrl1": "Control + chanvesse", "ctrl_bhattacharya": "Control + Bhattacharya"}
-
 PANEL_INCHES = 4.5  # size of each subplot; the figure is resized to fit the framework's subplot grid
 DPI = 100
 MIN_FRAME_GAP = 0.12  # seconds; at most ~8 frames per second go to the browser
@@ -246,7 +235,7 @@ plt.pause = _pause
 # The framework loads its images by bare file name, so it has to run from the repo root.
 os.chdir(ROOT)
 sys.path.insert(0, str(ROOT))
-from seg_fwk import segmentation  # noqa: E402
+from seg_fwk import IMAGES, segmentation, ui_options  # noqa: E402
 import schemes  # noqa: E402
 
 # In the page steering doesn't pause the run, so check for new regions more often than the desktop default (200).
@@ -292,15 +281,14 @@ async def index():
 
 @app.get("/api/options")
 async def options():
+    opts = ui_options()  # the tables live in seg_fwk.py
     images = []
-    for name, file in IMAGES.items():
-        with Image.open(ROOT / file) as im:
+    for im in opts["images"]:
+        with Image.open(ROOT / im["file"]) as img:
             out = io.BytesIO()
-            im.convert("L").save(out, format="PNG")
-            images.append({"name": name, "file": file, "width": im.width, "height": im.height,
-                           "png": base64.b64encode(out.getvalue()).decode()})
-    return JSONResponse({"images": images, "algos": [{"name": k, "title": TITLES.get(k, k), "label": v}
-                                                     for k, v in ALGOS.items()]})
+            img.convert("L").save(out, format="PNG")
+            images.append({**im, "width": img.width, "height": img.height, "png": base64.b64encode(out.getvalue()).decode()})
+    return JSONResponse({"images": images, "algos": opts["algos"]})
 
 
 @app.post("/api/run")
@@ -308,7 +296,7 @@ async def start(req: RunRequest):
     global _run
     if req.imname not in IMAGES:
         raise HTTPException(400, f"Unknown image {req.imname!r}")
-    if req.algo not in ALGOS:
+    if req.algo not in {a["name"] for a in ui_options()["algos"]}:
         raise HTTPException(400, f"Unknown algorithm {req.algo!r}")
     if not 0 < req.dt <= 5:
         raise HTTPException(400, "dt must be between 0 and 5")

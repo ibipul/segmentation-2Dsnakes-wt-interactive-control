@@ -204,7 +204,7 @@ matplotlib.widgets.LassoSelector = _BrowserLasso
 plt.show = _show
 plt.pause = _pause
 
-from seg_fwk import segmentation  # noqa: E402
+from seg_fwk import segmentation, ui_options  # noqa: E402
 import schemes  # noqa: E402
 
 # In the page steering doesn't pause the run, so check for new regions more often than the desktop default (200).
@@ -238,3 +238,8 @@ def start_run(imname, algo, dt, polygon_json=""):
     finally:
         plt.close("all")
         emit({"type": "done", "status": status, "elapsed": round(time.time() - _run.started_at, 1)})
+
+
+def options_json():
+    """The image and algorithm pickers, straight from the registry in seg_fwk.py."""
+    return json.dumps(ui_options())

@@ -110,6 +110,21 @@ When run from Python, the Control algorithms pause every 200 iterations and open
 | `ctrl1` | Control + chanvesse | Chan-Vese with interactive feedback control |
 | `ctrl_bhattacharya` | Control + Bhattacharya | Bhattacharyya with interactive feedback control |
 
+## Developing the framework
+
+The browser view (`web/`) and the WebAssembly demo (`wasm/`) both run the Python in the repo root, so changes to it show up in both without touching either front end.
+
+To add an algorithm or an image, edit the `ALGOS` or `IMAGES` table at the top of `seg_fwk.py`:
+
+```python
+ALGOS["my_algo"] = dict(cls=my_scheme, run="run", title="My algo", label="One line shown in the picker")
+IMAGES["cells"] = "cells.png"
+```
+
+- **New module:** just `import` it from `seg_fwk.py` (directly or through another module). The demo follows the imports to find it.
+- **New package:** import it. The demo reads the imports and loads the matching Pyodide package, so it must be one Pyodide ships. Also add it to `requirements.txt` for `./run.sh`.
+- **Seeing the change:** restart `./run.sh` for `web/`. For the demo, serve the repo root (`python3 -m http.server`, then open `/wasm/`) and refresh. On GitHub Pages it appears after the next deploy.
+
 ## How it works
 
 **Level sets.** The contour is stored implicitly as a 2D function `phi` the size of the image; the contour is where `phi = 0`. Each iteration moves `phi` by an image force from the chosen functional plus a curvature term that keeps the contour smooth. Only a narrow band of pixels near the contour is updated. Every 10 iterations `phi` is re-initialized with Sussman redistancing, and the figure is redrawn.

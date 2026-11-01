@@ -127,16 +127,8 @@
 
 <script>
 const $ = (id) => document.getElementById(id);
-const IMAGES = [{ name: "twoObj", file: "../twoObj.bmp" }, { name: "zebra", file: "../zebra.bmp" }, { name: "airplane", file: "../airplane.png" }];
-const ALGOS = [
-  ["chanvesse", "chanvesse", "Chan-Vese: separates mean intensity inside vs outside"],
-  ["yezzi", "yezzi", "Yezzi: mean separation weighted by region area"],
-  ["bhattacharya", "bhattacharya", "Bhattacharyya: separates the intensity histograms"],
-  ["ctrl1", "Control + chanvesse", "Chan-Vese with interactive feedback control (steer any time; applied every 50 iterations)"],
-  ["ctrl_bhattacharya", "Control + Bhattacharya", "Bhattacharyya with interactive feedback control (steer any time; applied every 50 iterations)"],
-];
 const NSLOT = 8, MAXPT = 400;
-const state = { imname: "twoObj", algo: "chanvesse", worker: null, ready: false, busy: false, lasso: null, steer: null,
+const state = { imname: null, algo: null, built: false, worker: null, ready: false, busy: false, lasso: null, steer: null,
                 queued: [], stroke: null, lastLine: "", frames: 0, frameUrl: null, onDone: null, params: null };
 // SharedArrayBuffer (needs cross-origin isolation, see coi-serviceworker.js) lets Stop and steering reach the
 // Python while it computes. Without it the demo still runs, but cannot be steered.
@@ -150,13 +142,18 @@ function snippet() {
 }
 function setStatus(badge, cls, text) { $("status").innerHTML = `<span class="badge ${cls}">${esc(badge)}</span><span class="muted">${esc(text)}</span>`; }
 
-function buildOptions() {
-  $("images").innerHTML = IMAGES.map((im) =>
-    `<button class="img-opt" data-name="${im.name}"><img src="${im.file}" alt="${im.name}"><span><code>${im.name}</code></span></button>`).join("");
-  $("algos").innerHTML = ALGOS.map(([name, title, label]) =>
-    `<button class="algo" data-name="${name}"><b>${esc(title)}</b><span>${esc(label)}</span></button>`).join("");
+// The pickers come from the registry in seg_fwk.py (via the worker), so new images and algorithms appear by themselves.
+function buildOptions(options) {
+  if (state.built) return;
+  state.built = true;
+  $("images").innerHTML = options.images.map((im) =>
+    `<button class="img-opt" data-name="${esc(im.name)}"><img src="../${esc(im.file)}" alt="${esc(im.name)}"><span><code>${esc(im.name)}</code></span></button>`).join("");
+  $("algos").innerHTML = options.algos.map((a) =>
+    `<button class="algo" data-name="${esc(a.name)}"><b>${esc(a.title)}</b><span>${esc(a.label)}</span></button>`).join("");
   document.querySelectorAll(".img-opt").forEach((b) => b.onclick = () => { state.imname = b.dataset.name; refreshChoices(); });
   document.querySelectorAll(".algo").forEach((b) => b.onclick = () => { state.algo = b.dataset.name; refreshChoices(); });
+  state.imname = options.images[0] && options.images[0].name;
+  state.algo = options.algos[0] && options.algos[0].name;
   refreshChoices();
 }
 function refreshChoices() {
@@ -181,6 +178,7 @@ function onWorker(ev) {
     setStatus("loading", "b-info", ev.text);
     $("status").insertAdjacentHTML("beforeend", '<div class="loadbar" style="flex-basis:100%"><i></i></div>');
   } else if (ev.type === "ready") {
+    buildOptions(ev.options);
     state.ready = true; $("run").disabled = false;
     setStatus("ready", "b-ok", sab ? "Pick an image and algorithm, then press Run." :
       "Ready. Live steering is unavailable in this browser (it needs cross-origin isolation); the Control algorithms still run.");
@@ -364,7 +362,6 @@ $("stop").onclick = async () => {
   if (state.ready && !state.busy && $("status").textContent.includes("stopping")) setStatus("stopped", "b-warn", "");
 };
 
-buildOptions();
 startWorker();
 </script>
 </body>
