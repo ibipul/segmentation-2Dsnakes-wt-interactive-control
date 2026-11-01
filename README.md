@@ -16,6 +16,10 @@ PDE-based image segmentation by level set evolution, with interactive feedback c
 ![The browser view during a Control + Bhattacharya run on zebra](docs/web-view.png)
 <sub>The browser view during a Control + Bhattacharya run on `zebra`: the contour (left), `phi`, `phi_hat` and the user input `U`, with the framework's output below.</sub>
 
+## Live demo
+
+**[Try it in your browser](https://ibipul.github.io/segmentation-2Dsnakes-wt-interactive-control/)**: no install, no server. The same Python (NumPy, SciPy, Matplotlib) runs client-side as WebAssembly through [Pyodide](https://pyodide.org). The first visit downloads about 40 MB of runtime, which the browser caches. For local use, see below.
+
 ## Quick start
 
 ```bash
@@ -30,6 +34,7 @@ Requires Python 3.11 or newer. The first run creates a virtual environment in `.
 
 ## Contents
 
+- [Live demo](#live-demo)
 - [Features](#features)
 - [Using the browser view](#using-the-browser-view)
 - [Running from Python](#running-from-python)
@@ -46,6 +51,7 @@ Requires Python 3.11 or newer. The first run creates a virtual environment in `.
 - **Freeform starting region:** draw the initial contour by hand around the object.
 - **Interactive steering:** with the Control algorithms, mark areas that belong inside the object while the contour evolves.
 - **Browser view:** one command sets everything up and streams the evolution to a web page.
+- **WebAssembly demo:** the same page runs with no server at all, hosted on GitHub Pages.
 - **Pluggable schemes:** each functional is a self-contained class in `schemes.py`.
 
 ## Using the browser view
@@ -135,6 +141,12 @@ Your steering regions move `phi_hat`, and `phi_hat` pulls the contour toward the
 ├── web/
 │   ├── server.py        # runs the framework and streams its figures (FastAPI)
 │   └── index.html       # the browser page
+├── wasm/
+│   ├── bridge.py        # the in-browser counterpart of server.py (runs under Pyodide)
+│   ├── worker.js        # Web Worker that loads Pyodide and runs the framework
+│   ├── index.html       # the GitHub Pages demo (fetches the .py files and images above)
+│   └── coi-serviceworker.js  # enables shared memory on Pages, so Stop and steering work live
+├── index.html           # redirects the Pages root to wasm/
 ├── docs/web-view.png    # screenshot used in this README
 └── airplane.png, twoObj.bmp, zebra.bmp   # sample images
 ```
@@ -148,6 +160,16 @@ Your steering regions move `phi_hat`, and `phi_hat` pulls the contour toward the
 | `PYTHON=/path/to/python3.11 ./run.sh` | First Python 3.11+ found | Use a specific interpreter |
 | `seg_w_control._steer_every` | 200 (50 in the page) | Iterations between steering checkpoints, a multiple of 10 |
 | `seg_w_control._log_every` | 200 | Iterations between progress lines, a multiple of 10 |
+
+### Testing the WebAssembly demo locally
+
+`./run.sh` (the `web/` page) is the offline route. To try the Pages version on your machine, serve the repo root with any static server and open `/wasm/`:
+
+```bash
+python3 -m http.server 8000   # then open http://localhost:8000/wasm/
+```
+
+Without the cross-origin isolation headers this plain server lacks, the demo falls back to a mode with no live steering or instant Stop. GitHub Pages gets them from `wasm/coi-serviceworker.js`.
 
 ## Troubleshooting
 
